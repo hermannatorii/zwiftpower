@@ -50,7 +50,7 @@ type Event struct {
 
 // ImportZP imports data about the club with this ID
 func ImportZP(clubID int) []Rider {
-	data, err := getJSON(fmt.Sprintf("https://www.zwiftpower.com/cache3/teams/%d_riders.json", clubID))
+	data, err := getJSON(fmt.Sprintf("https://www.zwiftpower.com/api3.php?do=team_riders&id=%d", clubID))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,6 +66,8 @@ func ImportZP(clubID int) []Rider {
 
 // ImportRider imports data about the rider with this ID
 func ImportRider(riderID int) (rider Rider, err error) {
+	// I think hitting the profile URL loads the data into the cache
+	_, _ = http.Get(fmt.Sprintf("https://www.zwiftpower.com/profile.php?z=%d", riderID))
 	data, err := getJSON(fmt.Sprintf("https://www.zwiftpower.com/cache3/profile/%d_all.json", riderID))
 	if err != nil {
 		return rider, err
