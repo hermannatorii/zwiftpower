@@ -40,12 +40,26 @@ type riderData struct {
 
 // Event is a ZwiftPower event
 type Event struct {
-	EventType     string `json:"f_t"`
-	EventDateSecs int64  `json:"event_date"`
+	EventType     string        `json:"f_t"`
+	EventDateSecs EventDateType `json:"event_date"`
 	EventDate     time.Time
 	EventTitle    string      `json:"event_title"`
 	AvgWkg        interface{} `json:"avg_wkg"`
 	WkgFtp        interface{} `json:"wkg_ftp"`
+}
+
+// EventDateType so we can use a custom unmarshaller
+type EventDateType int64
+
+// UnmarshalJSON custom because usually EventDateSecs is a number, but sometimes it's an empty string
+func (e *EventDateType) UnmarshalJSON(data []byte) error {
+	var v int64
+
+	// recklessly ignoring the error, because we'll get an error if the JSON is an empty string
+	// and in that case we want to return 0
+	json.Unmarshal(data, &v)
+	*e = EventDateType(v)
+	return nil
 }
 
 // ImportZP imports data about the club with this ID
@@ -87,7 +101,7 @@ func ImportRider(riderID int) (rider Rider, err error) {
 	var latestEventDate time.Time
 	var latestRaceDate time.Time
 	for _, e := range r.Data {
-		e.EventDate = time.Unix(e.EventDateSecs, 0)
+		e.EventDate = time.Unix(int64(e.EventDateSecs), 0)
 		daysAgo := int(time.Now().Sub(e.EventDate).Hours() / 24)
 		// log.Printf("date %v, from %v is %d days ago\n", e.EventDate, e.EventDateSecs, daysAgo)
 		isRace := strings.Contains(e.EventType, "RACE")
