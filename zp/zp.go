@@ -63,24 +63,25 @@ func (e *EventDateType) UnmarshalJSON(data []byte) error {
 }
 
 // ImportZP imports data about the club with this ID
-func ImportZP(clubID int) []Rider {
+func ImportZP(clubID int) ([]Rider, error) {
 	data, err := getJSON(fmt.Sprintf("https://www.zwiftpower.com/api3.php?do=team_riders&id=%d", clubID))
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("getting club data: %v", err)
 	}
 
 	var c club
 	err = json.Unmarshal(data, &c)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("unmarshalling club data: %v", err)
 	}
 
-	return c.Data
+	return c.Data, nil
 }
 
 // ImportRider imports data about the rider with this ID
 func ImportRider(riderID int) (rider Rider, err error) {
 	// I think hitting the profile URL loads the data into the cache
+	log.Printf("ImportRider(%d)", riderID)
 	_, _ = http.Get(fmt.Sprintf("https://www.zwiftpower.com/profile.php?z=%d", riderID))
 	data, err := getJSON(fmt.Sprintf("https://www.zwiftpower.com/cache3/profile/%d_all.json", riderID))
 	if err != nil {
@@ -90,7 +91,8 @@ func ImportRider(riderID int) (rider Rider, err error) {
 	var r riderData
 	err = json.Unmarshal(data, &r)
 	if err != nil {
-		log.Print(string(data))
+		log.Printf("Error unmarshalling data: %v", err)
+		log.Printf(string(data))
 		return rider, err
 	}
 

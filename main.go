@@ -1,13 +1,26 @@
 package main
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
+	"io"
+	"log"
+	"net/http"
 	"os"
 	"strconv"
 
 	"github.com/lizrice/zwiftpower/zp"
 	"github.com/spf13/cobra"
+
+	"cloud.google.com/go/storage"
+)
+
+var (
+	Filename      string
+	SpreadsheetID string
+	Limit         int
+	storageClient *storage.Client
 )
 
 func getID(args []string, defaultID int) (id int) {
@@ -24,6 +37,37 @@ func getID(args []string, defaultID int) (id int) {
 }
 
 func main() {
+	httpCmd := &cobra.Command{
+		Use:   "http",
+		Short: "Run as a service",
+		Run: func(cmd *cobra.Command, args []string) {
+			var err error
+
+			// Unless a filename is specified, assume that this is being written to S3
+			if Filename == "" {
+				storageClient, err = storage.NewClient(context.Background())
+				if err != nil {
+					log.Fatalf("storage.NewClient: %v", err)
+				}
+				log.Printf("Opened storageClient")
+			}
+
+			port := os.Getenv("PORT")
+			if port == "" {
+				port = "8080"
+			}
+
+			http.Handle("/", http.FileServer(http.Dir("/tmp")))
+			http.HandleFunc("/trigger", HelloZP)
+
+			// Start HTTP server.
+			log.Printf("Listening on port %s", port)
+			if err := http.ListenAndServe(":"+port, nil); err != nil {
+				log.Fatal(err)
+			}
+		},
+	}
+
 	riderCmd := &cobra.Command{
 		Use:   "rider [ID]",
 		Short: "Import data for rider ID",
@@ -43,36 +87,120 @@ func main() {
 		Long:  `Default club ID is 2672, Revolution Velo`,
 		Run: func(cmd *cobra.Command, args []string) {
 			clubID := getID(args, 2672)
-			riders := zp.ImportZP(clubID)
-
-			f, err := os.Create("result.csv")
+			err := ZwiftPower(clubID, Limit)
 			if err != nil {
-				fmt.Printf("Error creating file: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Error getting ZwiftPower data for %d: %v", clubID, err)
 				os.Exit(1)
-			}
-			defer f.Close()
-
-			writer := csv.NewWriter(f)
-			defer writer.Flush()
-
-			for i, rider := range riders {
-				var err error
-				name := rider.Name
-				riders[i], err = zp.ImportRider(rider.Zwid)
-				if err != nil {
-					fmt.Printf("Error loading data for %s: %v\n", name, err)
-					continue
-				}
-				riders[i].Name = name
-				// fmt.Printf("%v\n", riders[i])
-				err = writer.Write(riders[i].Strings())
-				if err != nil {
-					fmt.Printf("Error writing to file: %v\n", err)
-				}
 			}
 		},
 	}
 
+	var limit int
+	limitString := os.Getenv("LIMIT")
+	if limitString != "" {
+		limit, _ = strconv.Atoi(limitString)
+	}
+
+	rootCmd.PersistentFlags().StringVarP(&Filename, "filename", "f", os.Getenv("FILENAME"), "Output file name")
+	rootCmd.PersistentFlags().StringVarP(&SpreadsheetID, "spreadsheet", "s", os.Getenv("SPREADSHEET"), "Google sheets ID")
+	rootCmd.PersistentFlags().IntVarP(&Limit, "limit", "l", limit, "Restrict to retrieving this number of riders' data. 0 means no limit - get them all.")
+	rootCmd.AddCommand(httpCmd)
 	rootCmd.AddCommand(riderCmd)
 	rootCmd.Execute()
+}
+
+func setOutput(filename string) (io.WriteCloser, error) {
+	ctx := context.Background()
+
+	if SpreadsheetID != "" {
+		log.Printf("Writing to spreadsheet")
+		sw, err := NewSpreadsheetWriter(ctx, SpreadsheetID)
+		if err != nil {
+			return nil, fmt.Errorf("error getting spreadsheet client: %v", err)
+		}
+		return sw, nil
+	}
+
+	// Upload an object with storage.Writer.
+	if storageClient != nil {
+		log.Printf("Writing to storage bucket")
+		bkt := storageClient.Bucket("revo-rider-aardvark")
+		attrs, err := bkt.Attrs(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("error getting bucket attributes: %v", err)
+		}
+
+		log.Printf("bucket %s, created at %s, is located in %s with storage class %s\n",
+			attrs.Name, attrs.Created, attrs.Location, attrs.StorageClass)
+		sc := bkt.Object("results.csv").NewWriter(ctx)
+		return sc, nil
+	}
+
+	if filename == "" {
+		log.Printf("Writing to stdout")
+		return os.Stdout, nil
+	}
+
+	log.Printf("Writing to file %s", filename)
+	f, err := os.Create(filename)
+	if err != nil {
+		log.Printf("Error creating file %s: %v\n", filename, err)
+	}
+
+	return f, err
+}
+
+func ZwiftPower(clubID int, limit int) error {
+	riders, err := zp.ImportZP(clubID)
+	if err != nil {
+		return fmt.Errorf("error in ImportZP: %v", err)
+	}
+
+	f, err := setOutput(Filename)
+	if err != nil {
+		return fmt.Errorf("opening file %s: %v", Filename, err)
+	}
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			log.Printf("closing: %v", err)
+		}
+	}()
+
+	writer := csv.NewWriter(f)
+	defer writer.Flush()
+
+	for i, rider := range riders {
+		var err error
+		name := rider.Name
+		riders[i], err = zp.ImportRider(rider.Zwid)
+		if err != nil {
+			return fmt.Errorf("loading data for %s (%d): %v", name, rider.Zwid, err)
+		}
+		riders[i].Name = name
+		// fmt.Printf("%v\n", riders[i])
+		err = writer.Write(riders[i].Strings())
+		if err != nil {
+			return fmt.Errorf("writing to file: %v", err)
+		}
+
+		if limit > 0 && i >= (limit-1) {
+			log.Printf("Limiting output to %d riders", limit)
+			break
+		}
+	}
+
+	return nil
+}
+
+func HelloZP(w http.ResponseWriter, r *http.Request) {
+	clubID := 2672
+	err := ZwiftPower(clubID, Limit)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting ZwiftPower data for %d: %v", clubID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf("%v", err)))
+	}
+
+	fmt.Fprintf(w, "Reading data for %d\n", clubID)
 }
