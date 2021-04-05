@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/csv"
 	"fmt"
 	"io"
 	"log"
@@ -167,8 +166,11 @@ func ZwiftPower(clubID int, limit int) error {
 		}
 	}()
 
-	writer := csv.NewWriter(f)
-	defer writer.Flush()
+	writer := NewRowWriter(f)
+	defer func() {
+		log.Printf("About to flush")
+		writer.Flush()
+	}()
 
 	for i, rider := range riders {
 		var err error
@@ -179,7 +181,7 @@ func ZwiftPower(clubID int, limit int) error {
 		}
 		riders[i].Name = name
 		// fmt.Printf("%v\n", riders[i])
-		err = writer.Write(riders[i].Strings())
+		err = writer.WriteRow(riders[i].Strings())
 		if err != nil {
 			return fmt.Errorf("writing to file: %v", err)
 		}
