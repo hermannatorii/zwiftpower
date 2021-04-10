@@ -110,9 +110,11 @@ func ImportRider(riderID int) (rider Rider, err error) {
 		// log.Printf("date %v, from %v is %d days ago\n", e.EventDate, e.EventDateSecs, daysAgo)
 		isRace := strings.Contains(e.EventType, "RACE")
 
-		rider.Rides++
-		if isRace {
-			rider.Races++
+		if daysAgo <= 365 {
+			rider.Rides++
+			if isRace {
+				rider.Races++
+			}
 		}
 
 		var wkgFtp float64

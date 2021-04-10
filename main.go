@@ -16,10 +16,11 @@ import (
 )
 
 var (
-	Filename      string
-	SpreadsheetID string
-	Limit         int
-	storageClient *storage.Client
+	Filename         string
+	SpreadsheetID    string
+	SpreadsheetSheet string
+	Limit            int
+	storageClient    *storage.Client
 )
 
 func getID(args []string, defaultID int) (id int) {
@@ -101,7 +102,8 @@ func main() {
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&Filename, "filename", "f", os.Getenv("FILENAME"), "Output file name")
-	rootCmd.PersistentFlags().StringVarP(&SpreadsheetID, "spreadsheet", "s", os.Getenv("SPREADSHEET"), "Google sheets ID")
+	rootCmd.PersistentFlags().StringVarP(&SpreadsheetID, "spreadsheet", "s", os.Getenv("SPREADSHEET_ID"), "Google sheets ID")
+	rootCmd.PersistentFlags().StringVarP(&SpreadsheetSheet, "sheetname", "n", os.Getenv("SPREADSHEET_SHEET"), "Google sheets sheet name")
 	rootCmd.PersistentFlags().IntVarP(&Limit, "limit", "l", limit, "Restrict to retrieving this number of riders' data. 0 means no limit - get them all.")
 	rootCmd.AddCommand(httpCmd)
 	rootCmd.AddCommand(riderCmd)
@@ -113,7 +115,7 @@ func setOutput(filename string) (io.WriteCloser, error) {
 
 	if SpreadsheetID != "" {
 		log.Printf("Writing to spreadsheet")
-		sw, err := NewSpreadsheetWriter(ctx, SpreadsheetID)
+		sw, err := NewSpreadsheetWriter(ctx, SpreadsheetID, SpreadsheetSheet)
 		if err != nil {
 			return nil, fmt.Errorf("error getting spreadsheet client: %v", err)
 		}

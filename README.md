@@ -12,7 +12,8 @@ https://<service URL>/trigger
 
 Environment variables on the Google Cloud Run service:
 
-* SPREADSHEET: Google sheets ID
+* SPREADSHEET_ID: Google sheets ID
+* SPREADSHEET_SHEET: Name of the sheet
 * LIMIT: for testing, limit the number of riders we get data for
 
-SPREADSHEET doesn't work yet! But if you don't set it, you can get the results written to a results.csv file in the Google Cloud storage bucket. 
+If you don't set SPREADSHEET_ID, you get the results written to a results.csv file in the Google Cloud storage bucket. 
