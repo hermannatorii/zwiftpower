@@ -64,7 +64,12 @@ func TestRiderStrings(t *testing.T) {
 func TestFormatAsExpected(t *testing.T) {
 	ss := strings.Split("Some name,98588,2020-04-15,This month,ZZRC SUB 2.0 Ride,160,https://www.zwiftpower.com/profile.php?z=98588,2.5,2.7,0,3,47,Stage 4 Race - Tour of Watopia 2020,2020-03-21", ",")
 
-	rider, err := ImportRider(98588)
+	client, err := NewClient()
+	if err != nil {
+		t.Fatalf("Failed to log in: %v", err)
+	}
+
+	rider, err := ImportRider(client, 98588)
 	if err != nil {
 		t.Fatalf("Failed to get data from ZwiftPower: %v", err)
 	}

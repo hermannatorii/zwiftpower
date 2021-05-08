@@ -15,3 +15,6 @@ container: zwiftpower
 zwiftpower: *.go zp/*.go
 	GOOS=linux go build .
 
+local: *.go zp/*.go
+	go build .
+

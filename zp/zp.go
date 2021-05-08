@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
 	"strconv"
 	"strings"
 	"time"
@@ -62,9 +63,23 @@ func (e *EventDateType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func NewClient() (*http.Client, error) {
+	log.Printf("NewClient")
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{
+		Jar: jar,
+	}
+
+	return client, nil
+}
+
 // ImportZP imports data about the club with this ID
-func ImportZP(clubID int) ([]Rider, error) {
-	data, err := getJSON(fmt.Sprintf("https://www.zwiftpower.com/api3.php?do=team_riders&id=%d", clubID))
+func ImportZP(client *http.Client, clubID int) ([]Rider, error) {
+	data, err := getJSON(client, fmt.Sprintf("https://www.zwiftpower.com/cache3/teams/%d_riders.json", clubID))
 	if err != nil {
 		return nil, fmt.Errorf("getting club data: %v", err)
 	}
@@ -79,11 +94,11 @@ func ImportZP(clubID int) ([]Rider, error) {
 }
 
 // ImportRider imports data about the rider with this ID
-func ImportRider(riderID int) (rider Rider, err error) {
+func ImportRider(client *http.Client, riderID int) (rider Rider, err error) {
 	// I think hitting the profile URL loads the data into the cache
 	log.Printf("ImportRider(%d)", riderID)
-	_, _ = http.Get(fmt.Sprintf("https://www.zwiftpower.com/profile.php?z=%d", riderID))
-	data, err := getJSON(fmt.Sprintf("https://www.zwiftpower.com/cache3/profile/%d_all.json", riderID))
+	_, _ = client.Get(fmt.Sprintf("https://www.zwiftpower.com/profile.php?z=%d", riderID))
+	data, err := getJSON(client, fmt.Sprintf("https://www.zwiftpower.com/cache3/profile/%d_all.json", riderID))
 	if err != nil {
 		return rider, err
 	}
@@ -181,8 +196,8 @@ func ImportRider(riderID int) (rider Rider, err error) {
 	return rider, nil
 }
 
-func getJSON(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func getJSON(client *http.Client, url string) ([]byte, error) {
+	resp, err := client.Get(url)
 	if err != nil {
 		return []byte{}, err
 	}

@@ -73,7 +73,12 @@ func main() {
 		Short: "Import data for rider ID",
 		Run: func(cmd *cobra.Command, args []string) {
 			riderID := getID(args, 98588)
-			rider, err := zp.ImportRider(riderID)
+			client, err := zp.NewClient()
+			if err != nil {
+				fmt.Printf("Error getting client: %v", err)
+			}
+
+			rider, err := zp.ImportRider(client, riderID)
 			if err != nil {
 				fmt.Printf("Error getting rider: %v", err)
 			}
@@ -152,7 +157,12 @@ func setOutput(filename string) (io.WriteCloser, error) {
 }
 
 func ZwiftPower(clubID int, limit int) error {
-	riders, err := zp.ImportZP(clubID)
+	client, err := zp.NewClient()
+	if err != nil {
+		return fmt.Errorf("error getting client: %v", err)
+	}
+
+	riders, err := zp.ImportZP(client, clubID)
 	if err != nil {
 		return fmt.Errorf("error in ImportZP: %v", err)
 	}
@@ -177,7 +187,7 @@ func ZwiftPower(clubID int, limit int) error {
 	for i, rider := range riders {
 		var err error
 		name := rider.Name
-		riders[i], err = zp.ImportRider(rider.Zwid)
+		riders[i], err = zp.ImportRider(client, rider.Zwid)
 		if err != nil {
 			return fmt.Errorf("loading data for %s (%d): %v", name, rider.Zwid, err)
 		}
