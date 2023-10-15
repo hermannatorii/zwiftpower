@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/lizrice/zwiftpower/zp"
+	"github.com/hermannatorii/zwiftpower/zp"
 	"github.com/spf13/cobra"
 
 	"cloud.google.com/go/storage"
@@ -89,9 +89,9 @@ func main() {
 	rootCmd := &cobra.Command{
 		Use:   "zp [ID]",
 		Short: "Import data for club ID",
-		Long:  `Default club ID is 2672, Revolution Velo`,
+		Long:  `Default club ID is 2740, Team CRYO-GEN`,
 		Run: func(cmd *cobra.Command, args []string) {
-			clubID := getID(args, 2672)
+			clubID := getID(args, 2740)
 			err := ZwiftPower(clubID, Limit)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error getting ZwiftPower data for %d: %v", clubID, err)
